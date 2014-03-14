@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
-# Copyright (c) 2013-2014 Abram Hindle
+# Copyright (c) 2013-2014 Abram Hindle, Alexander Wong
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 import flask
-from flask import Flask, request
+from flask import Flask, request, render_template
 from flask_sockets import Sockets
 import gevent
 from gevent import queue
@@ -68,8 +68,10 @@ myWorld.add_set_listener( set_listener )
         
 @app.route('/')
 def hello():
-    '''Return something coherent here.. perhaps redirect to /static/index.html '''
-    return None
+    """
+    Returns the template 'index.html'
+    """
+    return render_template("index.html")
 
 def read_ws(ws,client):
     '''A greenlet function that reads from the websocket and updates the world'''
@@ -94,26 +96,44 @@ def flask_post_json():
     else:
         return json.loads(request.form.keys()[0])
 
+def flask_respond_json(data):
+    response = make_response(json.dumps(data))
+    response.headers['Content-Type']='application/json'
+    return response
+
 @app.route("/entity/<entity>", methods=['POST','PUT'])
 def update(entity):
-    '''update the entities via this interface'''
-    return None
+    '''
+    Update the entities
+    '''
+    update_values = flask_post_json(request);
+    for k, v in update_values.iteritems():
+        myWorld.update(entity, k, v)
+    return flask_respond_json(myWorld.get(entity))    
 
 @app.route("/world", methods=['POST','GET'])    
 def world():
-    '''you should probably return the world here'''
-    return None
+    '''
+    Return the world
+    '''
+    return flask_respond_json(myWorld.world())
 
 @app.route("/entity/<entity>")    
 def get_entity(entity):
-    '''This is the GET version of the entity interface, return a representation of the entity'''
-    return None
+    '''
+    This is the GET version of the entity interface,
+    return a representation of the entity
+    '''
+    return flask_respond_json(myWorld.get(entity))
 
 
 @app.route("/clear", methods=['POST','GET'])
 def clear():
-    '''Clear the world out!'''
-    return None
+    '''
+    Clear the world
+    '''
+    myWorld.clear()
+    return flask_respond_json(myWorld.world())
 
 
 
