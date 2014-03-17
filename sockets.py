@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 import flask
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, make_response
 from flask_sockets import Sockets
 import gevent
 from gevent import queue
@@ -25,6 +25,16 @@ import os
 app = Flask(__name__)
 sockets = Sockets(app)
 app.debug = True
+
+class Client:
+    def __init__(self):
+        self.queue = queue.Queue()
+    
+    def put(self, value):
+        self.queue.put_nowait(value)
+
+    def get(self):
+        return self.queue.get()
 
 class World:
     def __init__(self):
@@ -59,11 +69,16 @@ class World:
     def world(self):
         return self.space
 
+def set_listener(entity, value):
+    '''
+    do something with the update ! 
+    '''
+    message = json.dumps({entity: value})
+    for client in clients:
+        client.put(message)
+
 myWorld = World()        
-
-def set_listener( entity, data ):
-    ''' do something with the update ! '''
-
+clients = list()
 myWorld.add_set_listener( set_listener )
         
 @app.route('/')
@@ -74,15 +89,38 @@ def hello():
     return render_template("index.html")
 
 def read_ws(ws,client):
-    '''A greenlet function that reads from the websocket and updates the world'''
-    # XXX: TODO IMPLEMENT ME
+    '''
+    A greenlet function that reads from the websocket and updates the world
+    '''
+    while True:
+        rawData = ws.receive()
+        if rawData != None:
+            values = json.loads(rawData)
+            for key in values:
+                myWorld.set(key, values[key])
+        else:
+            break
     return None
 
 @sockets.route('/subscribe')
 def subscribe_socket(ws):
-    '''Fufill the websocket URL of /subscribe, every update notify the
-       websocket and read updates from the websocket '''
-    # XXX: TODO IMPLEMENT ME
+    '''
+    Fufill the websocket URL of /subscribe, every update notify the
+    websocket and read updates from the websocket
+    '''
+    client = Client()
+    clients.append(client)
+    
+    event = gevent.spawn(read_ws, ws, client)
+    try:
+        while True:
+            ws.send(client.get())
+    except:
+        pass
+    finally:
+        clients.remove(client)
+        gevent.kill(event)
+
     return None
 
 

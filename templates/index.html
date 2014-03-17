@@ -27,85 +27,84 @@
     <canvas id="c" width="100%" height="100%" style="-webkit-tap-highlight-color: transparent;"></canvas> 
 
     <script>
-      // Fix me
-var canvas = document.getElementById('c');
-var host = window.location.host;
-var context = canvas.getContext("2d");
-var W = canvas.width  = window.innerWidth-6;
-var H = canvas.height = window.innerHeight-50;
-var wscounter = 0;
-var socket;
+      var canvas = document.getElementById('c');
+      var host = window.location.host;
+      var context = canvas.getContext("2d");
+      var W = canvas.width  = window.innerWidth-6;
+      var H = canvas.height = window.innerHeight-50;
+      var wscounter = 0;
+      var socket;
+      
+      function debug(str) {
+        var debugDiv = document.getElementById('debug');
+        debugDiv.innerHTML = "" + str;
+      }
+      debug("Test");
 
-function debug(str) {
-    var debugDiv = document.getElementById('debug');
-    debugDiv.innerHTML = "" + str;
-}
-debug("Test");
+      world = {};
 
-world = {};
+      function drawCircle(context,entity) {
+        with(context) {
+          beginPath();                
+          lineWidth = 3;
+          var x = entity["x"];
+          var y = entity["y"];
+          //moveTo(x,y);
+          fillStyle = entity["colour"];
+          strokeStyle = fillStyle;
+          arc(x, y, 
+            (entity["radius"])?entity["radius"]:50, 0, 2.0 * Math.PI, false);  
+          stroke();                                
+        }
+      }
 
-//XXX: TODO Make this prettier!
-function drawCircle(context,entity) {
-    with(context) {
-        beginPath();                
-        lineWidth = 3;
-        var x = entity["x"];
-        var y = entity["y"];
-        //moveTo(x,y);
-        fillStyle = entity["colour"];
-        strokeStyle = fillStyle;
-        arc(x, y, (entity["radius"])?entity["radius"]:50, 0, 2.0 * Math.PI, false);  
-        stroke();                                
-    }
-}
+      function prepEntity(entity) {
+        if (!entity["colour"]) {
+          entity["colour"] = "#FF0000";
+        }
+        if (!entity["radius"]) {
+          entity["radius"] = 50;
+        }
+        return entity;
+      }
 
-function prepEntity(entity) {
-    if (!entity["colour"]) {
-        entity["colour"] = "#FF0000";
-    }
-    if (!entity["radius"]) {
-        entity["radius"] = 50;
-    }
-    return entity;
-}
+      function clearFrame() {
+        with(context) {
+	  moveTo(0,0);
+          fillStyle = "#000";
+	  fillRect(0,0,W,H);
+        }
+      }
 
-function clearFrame() {
-    with(context) {
-	moveTo(0,0);
-	fillStyle = "#000";
-	fillRect(0,0,W,H);
-    }
+      // This actually draws the frame
+      function renderFrame() {
+        clearFrame();
+          for (var key in world) {
+            var entity = world[key];
+            drawCircle(context,prepEntity(entity));
+          }
+      }
 
-}
+      var drawNext = true;
+      // Signals that there's something to be drawn
+      function drawNextFrame() {
+        drawNext = true;
+      }
 
-// This actually draws the frame
-function renderFrame() {
-    clearFrame();
-    for (var key in world) {
-        var entity = world[key];
-        drawCircle(context,prepEntity(entity));
-    }
-}
+      // This optionally draws the frame, 
+      //call this if you're not sure if you should update
+      // the canvas
+      function drawFrame() {
+        if (drawNext) {
+          renderFrame();
+          drawNext = false;
+        }
+      }
 
-var drawNext = true;
-// Signals that there's something to be drawn
-function drawNextFrame() {
-    drawNext = true;
-}
+      // This is unpleasent, canvas clicks are not handled well
+      // So use this code, it works well on multitouch devices as well.
 
-// This optionally draws the frame, call this if you're not sure if you should update
-// the canvas
-function drawFrame() {
-    if (drawNext) {
-        renderFrame();
-        drawNext = false;
-    }
-}
-
-// This is unpleasent, canvas clicks are not handled well
-// So use this code, it works well on multitouch devices as well.
-
-function getPosition(e) {
+      function getPosition(e) {
 	if ( e.targetTouches && e.targetTouches.length > 0) {
 		var touch = e.targetTouches[0];
 		var x = touch.pageX  - canvas.offsetLeft;
@@ -119,28 +118,33 @@ function getPosition(e) {
 		var y = e.pageY  - canvas.offsetTop;
 		return [x,y];
 	}
-}
+      }
 
-function addEntity(entity, data) {
-    world[entity] = data;
-    drawNextFrame(); // (but should we?)
-    //XXX: Send a XHTML Request that updates the entity you just modified!
-}
-var counter = 0;
-function addEntityWithoutName(data) {
-    var name = "X"+(counter++)%100;
-    addEntity(name,data);
-}
+      function addEntity(entity, data) {
+        world[entity] = data;
+        drawNextFrame(); // (but should we?)
+        //XXX: Send a XHTML Request that updates the entity you just modified!
+        var object = {};
+        object[entity] = data;
+        socket.send(JSON.stringify(object));
+      }
+      
+      var counter = 0;
+      
+      function addEntityWithoutName(data) {
+        var name = "X"+(counter++)%100;
+        addEntity(name,data);
+      }
 
-// canvas + mouse/touch is complicated 
-// I give you this because well the mouse/touch stuff is a total
-// pain to get right. This has some out of context bug too.
-mouse = (function() {
-    // Now this isn't the most popular way of doing OO in 
-    // Javascript, but it relies on lexical scope and I like it
-    // This isn't 301 so I'm not totally bound to OO :)
-    var self;    
-    self = {
+      // canvas + mouse/touch is complicated 
+      // I give you this because well the mouse/touch stuff is a total
+      // pain to get right. This has some out of context bug too.
+      mouse = (function() {
+      // Now this isn't the most popular way of doing OO in 
+      // Javascript, but it relies on lexical scope and I like it
+      // This isn't 301 so I'm not totally bound to OO :)
+      var self;    
+      self = {
         clicked: 0,
         // these are listener lists append to them
         mousemovers: [],
@@ -222,61 +226,71 @@ mouse = (function() {
             canvas.addEventListener("touchstart", self.touchstart, false);
             canvas.addEventListener("touchmove",  self.touchmove, false);
             canvas.addEventListener("touchend",   self.touchend, false);
-	}
-    };
-    self.mouseinstall();
-    return self;
-})();
+	  }
+        };
+        self.mouseinstall();
+        return self;
+      })();
 
-// Add the application specific mouse listeners!
-//XXX: TODO Make these prettier!
-mouse.mousedowners.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'blue'});
-});
+      // Add the application specific mouse listeners!
+      //XXX: TODO Make these prettier!
+      mouse.mousedowners.push(function(x,y,clicked,e) {
+        addEntityWithoutName({'x':x,'y':y,'colour':'#99CCFF',
+						   'radius':'100'});
+      });
 
-mouse.mouseuppers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'red'});
-});
+      mouse.mouseuppers.push(function(x,y,clicked,e) {
+        addEntityWithoutName({'x':x,'y':y,'colour':'#00CCFF',
+						   'radius':'100'});
+      });
 
-mouse.mousedraggers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'green',
-                          'radius':10});
-});
-
-
-function update() {
-    drawFrame();
-}
+      mouse.mousedraggers.push(function(x,y,clicked,e) {
+        addEntityWithoutName({'x':x,'y':y,'colour':'#FFFFFF',
+						   'radius':10});
+      });
 
 
-function wsSetup() {
-    var url = "ws://"+host+"/subscribe";   
-    socket = new WebSocket(url);
-    socket.onopen = function() {
-        //XXX: TODO What are you going to do here?
-    };
-    socket.onerror = function(msg) {
+      function update() {
+        drawFrame();
+      }
+
+
+      function wsSetup() {
+        var url = "ws://"+host+"/subscribe";   
+        socket = new WebSocket(url);
+        socket.onopen = function() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'http://'+host+'/world', false);
+        xhr.send(null);
+        for (var key in serverWorld) {
+          world[key] = serverWorld[key]
+        }
+      };
+
+      socket.onerror = function(msg) {
         debug("WebSocket Error:" + msg.data);
-    };
-    socket.onmessage = function(msg) {  
+      };
+
+      socket.onmessage = function(msg) {  
         try {
             debug("WebSocket Recv:" + msg.data);
-            //XXX: TODO What are you going to do here?            
+            var message = JSON.parse(msg.data);
+            for (key in message) {
+              if (world[key] != message[key]) {
+                world[key] = message[key];
+		drawNextFrame();
+              }
+            }
         } catch (e) {
             alert("socket on message: " + e);
         }
-    }; 
-}
+      }; 
+    }
 
-wsSetup();
+    wsSetup();
 
-
-
-
-// 30 frames per second
-setInterval( update, 1000/30.0);
-
-
+    // 30 frames per second
+    setInterval( update, 1000/30.0);
     </script>
 </body>
 </html>
